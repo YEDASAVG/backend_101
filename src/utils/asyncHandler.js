@@ -21,6 +21,7 @@
  *   - Keeps all error handling consistent and centralized.
  */
 
+// here we did implicit return
 const asyncHandler = (requestHandler) => (req, res, next) => {
   Promise.resolve(requestHandler(req, res, next)).catch((error) => next(error));
 };
