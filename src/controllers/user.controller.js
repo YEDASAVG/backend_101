@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import { Subscription } from "../models/subscription.model.js";
 
 // Utility function to generate and store JWT tokens for a user
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -392,7 +393,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 
   // Validate that username is provided
   if (!username?.trim()) {
-    throw new ApiError(400, "username is missing");
+    throw new ApiError(400, "Username is missing");
   }
 
   // Aggregate user data along with subscription info
@@ -433,7 +434,15 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         // Check if the current user is subscribed to this channel
         isSubscribed: {
           $cond: {
-            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            if: { 
+              $and: [
+                { $ne: [req.user?._id, null] },
+                { $in: [
+                  req.user?._id, 
+                  { $map: { input: "$subscribers", as: "sub", in: "$$sub.subscriber" } }
+                ]}
+              ]
+            },
             then: true,
             else: false,
           },
@@ -457,7 +466,7 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 
   // If no channel found, throw 404 error
   if (!channel?.length) {
-    throw new ApiError(404, "Channel does not exists");
+    throw new ApiError(404, "Channel does not exist");
   }
 
   // Send the channel profile as response
