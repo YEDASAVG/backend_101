@@ -385,6 +385,89 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "Cover Image Updated Successfully"));
 });
 
+// Get a user's channel profile with subscription info ✅✅✅
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  // Extract username from request parameters
+  const { username } = req.params;
+
+  // Validate that username is provided
+  if (!username?.trim()) {
+    throw new ApiError(400, "username is missing");
+  }
+
+  // Aggregate user data along with subscription info
+  const channel = await User.aggregate([
+    // Match the user by username (case-insensitive)
+    {
+      $match: {
+        username: username?.toLowerCase(),
+      },
+    },
+    // Lookup all subscriptions where this user is the channel (subscribers)
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    // Lookup all subscriptions where this user is the subscriber (channels they subscribed to)
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    // Add fields for counts and subscription status
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        channelSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+        // Check if the current user is subscribed to this channel
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    // Project only the required fields for the response
+    {
+      $project: {
+        fullName: 1,
+        username: 1,
+        subscribersCount: 1,
+        channelSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+
+  // If no channel found, throw 404 error
+  if (!channel?.length) {
+    throw new ApiError(404, "Channel does not exists");
+  }
+
+  // Send the channel profile as response
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, channel[0], "User channel fetched successfully")
+    );
+});
+
 export {
   registerUser,
   loginUser,
@@ -395,4 +478,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  getUserChannelProfile,
 };
