@@ -5,6 +5,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
 import { Subscription } from "../models/subscription.model.js";
+import mongoose from "mongoose";
 
 // Utility function to generate and store JWT tokens for a user
 const generateAccessAndRefreshTokens = async (userId) => {
@@ -434,14 +435,22 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         // Check if the current user is subscribed to this channel
         isSubscribed: {
           $cond: {
-            if: { 
+            if: {
               $and: [
                 { $ne: [req.user?._id, null] },
-                { $in: [
-                  req.user?._id, 
-                  { $map: { input: "$subscribers", as: "sub", in: "$$sub.subscriber" } }
-                ]}
-              ]
+                {
+                  $in: [
+                    req.user?._id,
+                    {
+                      $map: {
+                        input: "$subscribers",
+                        as: "sub",
+                        in: "$$sub.subscriber",
+                      },
+                    },
+                  ],
+                },
+              ],
             },
             then: true,
             else: false,
@@ -477,6 +486,64 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     );
 });
 
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: mongoose.Types.ObjectId(req.user._id),
+        /* Why use mongoose.Types.ObjectId?
+        In MongoDB, the _id field is an ObjectId type, not a string.
+        req.user._id is usually a string (from your JWT or session).
+        mongoose.Types.ObjectId(req.user._id) converts the string into the correct ObjectId type so MongoDB can match it. */
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [
+                {
+                  $project: {
+                    fullName: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $addFields: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+  //
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user[0].WatchHistory,
+        "Watch historyfetched successfully"
+      )
+    );
+});
+
 export {
   registerUser,
   loginUser,
@@ -488,4 +555,5 @@ export {
   updateUserAvatar,
   updateUserCoverImage,
   getUserChannelProfile,
+  getWatchHistory,
 };
