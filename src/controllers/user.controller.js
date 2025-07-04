@@ -486,8 +486,12 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
     );
 });
 
+// Get user's watch history with video and owner info ✅✅✅
+
 const getWatchHistory = asyncHandler(async (req, res) => {
+  // Aggregate the user's watch history with video and owner details
   const user = await User.aggregate([
+    // Match the current user by their ObjectId
     {
       $match: {
         _id: mongoose.Types.ObjectId(req.user._id),
@@ -497,13 +501,15 @@ const getWatchHistory = asyncHandler(async (req, res) => {
         mongoose.Types.ObjectId(req.user._id) converts the string into the correct ObjectId type so MongoDB can match it. */
       },
     },
+    // Lookup videos whose _id is in the user's watchHistory array
     {
       $lookup: {
-        from: "videos",
-        localField: "watchHistory",
-        foreignField: "_id",
-        as: "watchHistory",
+        from: "videos", // Join with videos collection
+        localField: "watchHistory", // User's watchHistory (array of video IDs)
+        foreignField: "_id", // Match with video _id
+        as: "watchHistory", // Output as watchHistory array
         pipeline: [
+          // For each video, lookup the owner (user who uploaded the video)
           {
             $lookup: {
               from: "users",
@@ -521,6 +527,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
               ],
             },
           },
+          // Flatten the owner array to a single object
           {
             $addFields: {
               owner: {
@@ -532,16 +539,14 @@ const getWatchHistory = asyncHandler(async (req, res) => {
       },
     },
   ]);
-  //
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        user[0].WatchHistory,
-        "Watch historyfetched successfully"
-      )
-    );
+  // Return the user's watch history (with video and owner info) in the response
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      user[0].watchHistory, // (fix: should be lowercase 'watchHistory')
+      "Watch history fetched successfully"
+    )
+  );
 });
 
 export {
